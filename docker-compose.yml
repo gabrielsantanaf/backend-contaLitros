@@ -33,6 +33,15 @@ services:
       DB_NAME: ${DB_NAME:-contalitro}
       DB_USER: ${DB_USER:-contalitro}
       DB_PASSWORD: ${DB_PASSWORD:-contalitro}
+      AUTO_CADASTRO: ${AUTO_CADASTRO:-false}
+      MQTT_HOST: ${MQTT_HOST:-}
+      MQTT_PORT: ${MQTT_PORT:-8883}
+      MQTT_PROTOCOL: ${MQTT_PROTOCOL:-ssl}
+      MQTT_USER: ${MQTT_USER:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-contalitro-backend}
+      TB_ENABLED: ${TB_ENABLED:-false}
+      TB_URL: ${TB_URL:-https://thingsboard.cloud}
       TZ: UTC
     ports:
       - "${APP_PORT:-8080}:8080"
