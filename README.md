@@ -5,7 +5,8 @@ guarda o histórico por veículo, organiza as leituras em viagens e envia os dad
 ThingsBoard. O backend **só lê** o broker: não publica nada e não fala com o equipamento.
 
 **Stack:** Java 21, Spring Boot 4.1, Spring Data JPA (Hibernate 7), Flyway,
-PostgreSQL 16 (prod) / H2 (dev e testes), Eclipse Paho MQTT 1.2.5, Docker.
+PostgreSQL 16 (prod) / H2 (dev e testes), Eclipse Paho MQTT 1.2.5, springdoc-openapi
+(Swagger UI), Docker.
 
 ## Arquitetura limpa
 
@@ -123,6 +124,10 @@ Para rodar só o banco e o backend pela IDE: `docker compose up -d postgres` e
 
 ## API REST
 
+A forma mais fácil de testar é pelo **Swagger UI**: abra http://localhost:8080 (redireciona
+para `/swagger-ui.html`), escolha a rota e use **Try it out**. A especificação OpenAPI fica em
+`/v3/api-docs`.
+
 | Método | Rota | Retorno |
 |---|---|---|
 | POST | `/veiculos` | Cadastra um veículo (201, ou 409 se o `deviceId` já existe) |
@@ -154,7 +159,7 @@ POST /veiculos
 ./mvnw test
 ```
 
-61 testes, sem precisar de banco ou broker instalados:
+64 testes, sem precisar de banco ou broker instalados:
 
 - **Domínio:** recorte dos contadores, regras de abertura e fechamento de viagem.
 - **Aplicação:** casos de uso com repositórios em memória (sem Spring).
@@ -162,6 +167,6 @@ POST /veiculos
 - **Fluxo:** do texto recebido no tópico até o banco (H2), incluindo Last Will e inatividade.
 - **Persistência:** adaptadores JPA sobre o esquema do Flyway.
 - **ThingsBoard:** adaptador HTTP contra um servidor local.
-- **API:** cadastro, consultas, relatório e respostas 400, 404 e 409.
+- **API:** cadastro, consultas, relatório, respostas 400, 404 e 409 e a documentação OpenAPI.
 
 Ainda não testado com os serviços reais: HiveMQ Cloud (TLS e credenciais) e ThingsBoard Cloud.
