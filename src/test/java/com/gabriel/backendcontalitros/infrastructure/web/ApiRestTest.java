@@ -117,7 +117,7 @@ class ApiRestTest {
     @Test
     void consultaViagensLeiturasERelatorioDeConsumo() throws Exception {
         long id = cadastrarVeiculo();
-        Instant inicio = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(600);
+        Instant inicio = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(300);
         enviar(inicio, true, 100.0, 10.0, "50.00");
         enviar(inicio.plusSeconds(60), true, 110.0, 11.0, "56.00");
         enviar(inicio.plusSeconds(120), false, 130.0, 12.0, "62.00");

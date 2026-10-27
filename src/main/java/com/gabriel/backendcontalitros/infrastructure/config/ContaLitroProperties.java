@@ -14,7 +14,33 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record ContaLitroProperties(
         @DefaultValue("true") boolean autoCadastro,
         @DefaultValue("10m") Duration inatividade,
+        @DefaultValue Mqtt mqtt,
         @DefaultValue ThingsBoard thingsboard) {
+
+    /**
+     * Conexao com o broker. O cliente so sobe com {@code enabled=true} e um host informado.
+     * O backend so assina; a credencial pode ser Subscribe Only.
+     */
+    public record Mqtt(
+            @DefaultValue("true") boolean enabled,
+            String host,
+            @DefaultValue("8883") int port,
+            @DefaultValue("ssl") String protocolo,
+            String usuario,
+            String senha,
+            @DefaultValue("contalitro-backend") String clientId,
+            @DefaultValue("contalitro") String topicoBase,
+            @DefaultValue("1") int qos,
+            @DefaultValue("10s") Duration intervaloReconexao) {
+
+        public boolean configurado() {
+            return enabled && host != null && !host.isBlank();
+        }
+
+        public String uri() {
+            return protocolo + "://" + host + ":" + port;
+        }
+    }
 
     public record ThingsBoard(
             @DefaultValue("false") boolean enabled,
