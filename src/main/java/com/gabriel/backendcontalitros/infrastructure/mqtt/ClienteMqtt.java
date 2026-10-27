@@ -71,8 +71,9 @@ public class ClienteMqtt implements SmartLifecycle, MqttCallbackExtended {
             novo.connect(opcoes());
             cliente = novo;
         } catch (MqttException e) {
-            log.warn("Nao foi possivel conectar em {}: {}. Nova tentativa em {}s",
-                    config.uri(), e.getMessage(), config.intervaloReconexao().toSeconds());
+            String causa = e.getCause() != null ? e.getCause().toString() : e.getMessage();
+            log.warn("Nao foi possivel conectar em {}: {} (codigo {}). Nova tentativa em {}s",
+                    config.uri(), causa, e.getReasonCode(), config.intervaloReconexao().toSeconds());
             reconexao.schedule(this::conectar, config.intervaloReconexao().toMillis(), TimeUnit.MILLISECONDS);
         }
     }
