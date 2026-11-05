@@ -131,6 +131,7 @@ para `/swagger-ui.html`), escolha a rota e use **Try it out**. A especificação
 | Método | Rota | Retorno |
 |---|---|---|
 | POST | `/veiculos` | Cadastra um veículo (201, ou 409 se o `deviceId` já existe) |
+| PATCH | `/veiculos/{id}` | Edita o cadastro (só os campos enviados; `""` remove placa, modelo ou token). Use para cadastrar o token do ThingsBoard depois |
 | GET | `/veiculos` | Lista os veículos |
 | GET | `/veiculos/{id}/viagens` | Viagens do veículo, da mais recente para a mais antiga |
 | GET | `/veiculos/{id}/leituras` | Leituras no período (padrão: última hora) |
@@ -149,6 +150,13 @@ POST /veiculos
   "modelo": "Caminhão 1",
   "capacidadeTanqueL": 45,
   "metaConsumoKml": 10,
+  "thingsboardToken": "token-do-device"
+}
+```
+
+```json
+PATCH /veiculos/1
+{
   "thingsboardToken": "token-do-device"
 }
 ```
