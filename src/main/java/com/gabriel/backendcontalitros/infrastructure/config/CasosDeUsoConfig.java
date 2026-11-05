@@ -3,6 +3,7 @@ package com.gabriel.backendcontalitros.infrastructure.config;
 import com.gabriel.backendcontalitros.application.port.in.CadastrarVeiculoUseCase;
 import com.gabriel.backendcontalitros.application.port.in.ConsultarLeiturasUseCase;
 import com.gabriel.backendcontalitros.application.port.in.ConsultarViagensUseCase;
+import com.gabriel.backendcontalitros.application.port.in.EditarVeiculoUseCase;
 import com.gabriel.backendcontalitros.application.port.in.FecharViagensInativasUseCase;
 import com.gabriel.backendcontalitros.application.port.in.GerarRelatorioConsumoUseCase;
 import com.gabriel.backendcontalitros.application.port.in.ListarVeiculosUseCase;
@@ -16,6 +17,7 @@ import com.gabriel.backendcontalitros.application.port.out.ViagemRepositoryPort;
 import com.gabriel.backendcontalitros.application.service.CadastrarVeiculoService;
 import com.gabriel.backendcontalitros.application.service.ConsultarLeiturasService;
 import com.gabriel.backendcontalitros.application.service.ConsultarViagensService;
+import com.gabriel.backendcontalitros.application.service.EditarVeiculoService;
 import com.gabriel.backendcontalitros.application.service.FecharViagensInativasService;
 import com.gabriel.backendcontalitros.application.service.GerarRelatorioConsumoService;
 import com.gabriel.backendcontalitros.application.service.ListarVeiculosService;
@@ -78,6 +80,11 @@ public class CasosDeUsoConfig {
     @Bean
     CadastrarVeiculoUseCase cadastrarVeiculo(VeiculoRepositoryPort veiculos, TransacaoPort transacao, Clock relogio) {
         return new CadastrarVeiculoService(veiculos, transacao, relogio);
+    }
+
+    @Bean
+    EditarVeiculoUseCase editarVeiculo(VeiculoRepositoryPort veiculos, TransacaoPort transacao) {
+        return new EditarVeiculoService(veiculos, transacao);
     }
 
     @Bean
