@@ -1,10 +1,12 @@
 package com.gabriel.backendcontalitros.infrastructure.web;
 
 import static com.gabriel.backendcontalitros.domain.model.DadosTelemetriaFixture.dados;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -59,8 +61,12 @@ class ApiRestTest {
     }
 
     private long cadastrarVeiculo() throws Exception {
-        String resposta = cadastrar(VEICULO_JSON).andReturn().getResponse().getContentAsString();
-        return Long.parseLong(resposta.replaceAll(".*\"id\":(\\d+).*", "$1"));
+        return idDe(cadastrar(VEICULO_JSON));
+    }
+
+    private static long idDe(ResultActions resposta) throws Exception {
+        String corpo = resposta.andReturn().getResponse().getContentAsString();
+        return Long.parseLong(corpo.replaceAll(".*\"id\":(\\d+).*", "$1"));
     }
 
     @Test
@@ -94,6 +100,38 @@ class ApiRestTest {
                 .andExpect(jsonPath("$.campos.capacidadeTanqueL").exists());
 
         cadastrar("{ nao e json").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cadastraOTokenDepoisSemExporOToken() throws Exception {
+        long id = idDe(cadastrar("{\"deviceId\": \"contalitro-001\", \"placa\": \"ABC1D23\"}")
+                .andExpect(jsonPath("$.possuiTokenThingsboard").value(false)));
+
+        editar(id, "{\"thingsboardToken\": \"token-novo\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.possuiTokenThingsboard").value(true))
+                .andExpect(jsonPath("$.placa").value("ABC1D23"))
+                .andExpect(content().string(not(containsString("token-novo"))));
+
+        mvc.perform(get("/veiculos"))
+                .andExpect(jsonPath("$[0].possuiTokenThingsboard").value(true))
+                .andExpect(jsonPath("$[0].placa").value("ABC1D23"));
+        assertThat(jdbc.queryForObject("SELECT thingsboard_token FROM veiculo WHERE id = ?", String.class, id))
+                .isEqualTo("token-novo");
+    }
+
+    @Test
+    void edicaoInvalidaRetorna400EInexistente404() throws Exception {
+        long id = cadastrarVeiculo();
+
+        editar(id, "{\"capacidadeTanqueL\": 0}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos.capacidadeTanqueL").exists());
+        editar(999, "{\"thingsboardToken\": \"token\"}").andExpect(status().isNotFound());
+    }
+
+    private ResultActions editar(long id, String json) throws Exception {
+        return mvc.perform(patch("/veiculos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
     @Test
