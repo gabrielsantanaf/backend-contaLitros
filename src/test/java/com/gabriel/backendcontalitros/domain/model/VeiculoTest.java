@@ -32,6 +32,29 @@ class VeiculoTest {
     }
 
     @Test
+    void alteraCadastroMantendoDeviceId() {
+        Veiculo veiculo = Veiculo.autoCadastrado("contalitro-001", T0);
+
+        veiculo.alterarCadastro("ABC1D23", "Caminhao 1", 60, 10.0, "token-do-device");
+
+        assertThat(veiculo.getDeviceId()).isEqualTo("contalitro-001");
+        assertThat(veiculo.getPlaca()).isEqualTo("ABC1D23");
+        assertThat(veiculo.getModelo()).isEqualTo("Caminhao 1");
+        assertThat(veiculo.getCapacidadeTanqueL()).isEqualTo(60);
+        assertThat(veiculo.getMetaConsumoKml()).isEqualTo(10.0);
+        assertThat(veiculo.possuiTokenPainel()).isTrue();
+    }
+
+    @Test
+    void alteracaoRecusaCapacidadeNaoPositiva() {
+        Veiculo veiculo = Veiculo.autoCadastrado("contalitro-001", T0);
+
+        assertThatThrownBy(() -> veiculo.alterarCadastro(null, null, 0, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(veiculo.getCapacidadeTanqueL()).isEqualTo(Veiculo.CAPACIDADE_TANQUE_PADRAO_L);
+    }
+
+    @Test
     void exigeDeviceId() {
         assertThatThrownBy(() -> Veiculo.autoCadastrado(" ", T0))
                 .isInstanceOf(IllegalArgumentException.class);

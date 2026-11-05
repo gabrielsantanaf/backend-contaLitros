@@ -10,11 +10,11 @@ public class Veiculo {
 
     private final Long id;
     private final String deviceId;
-    private final String placa;
-    private final String modelo;
-    private final double capacidadeTanqueL;
-    private final Double metaConsumoKml;
-    private final String thingsboardToken;
+    private String placa;
+    private String modelo;
+    private double capacidadeTanqueL;
+    private Double metaConsumoKml;
+    private String thingsboardToken;
     private boolean equipamentoOnline;
     private Instant ultimaComunicacao;
     private final Instant criadoEm;
@@ -25,9 +25,7 @@ public class Veiculo {
         if (deviceId == null || deviceId.isBlank()) {
             throw new IllegalArgumentException("deviceId e obrigatorio");
         }
-        if (capacidadeTanqueL <= 0) {
-            throw new IllegalArgumentException("capacidadeTanqueL deve ser positiva");
-        }
+        validarCapacidade(capacidadeTanqueL);
         this.id = id;
         this.deviceId = deviceId;
         this.placa = placa;
@@ -50,6 +48,23 @@ public class Veiculo {
     /** Veiculo criado automaticamente na primeira mensagem de um equipamento desconhecido. */
     public static Veiculo autoCadastrado(String deviceId, Instant criadoEm) {
         return novo(deviceId, null, null, null, null, null, criadoEm);
+    }
+
+    /** Substitui os dados cadastrais. O deviceId nao muda: ele liga o veiculo ao equipamento. */
+    public void alterarCadastro(String placa, String modelo, double capacidadeTanqueL,
+                                Double metaConsumoKml, String thingsboardToken) {
+        validarCapacidade(capacidadeTanqueL);
+        this.placa = placa;
+        this.modelo = modelo;
+        this.capacidadeTanqueL = capacidadeTanqueL;
+        this.metaConsumoKml = metaConsumoKml;
+        this.thingsboardToken = thingsboardToken;
+    }
+
+    private static void validarCapacidade(double capacidadeTanqueL) {
+        if (capacidadeTanqueL <= 0) {
+            throw new IllegalArgumentException("capacidadeTanqueL deve ser positiva");
+        }
     }
 
     public void registrarComunicacao(Instant instante) {
