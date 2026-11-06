@@ -8,15 +8,95 @@ ThingsBoard. O backend **só lê** o broker: não publica nada e não fala com o
 PostgreSQL 16 (prod) / H2 (dev e testes), Eclipse Paho MQTT 1.2.5, springdoc-openapi
 (Swagger UI), Docker.
 
-## Arquitetura limpa
+## Arquitetura
+
+### Visão geral do sistema
+
+```mermaid
+flowchart LR
+    ESP["Equipamento Conta Litro<br/>(ESP32 no veículo)"]
+
+    subgraph Nuvem
+        MQTT["HiveMQ Cloud<br/>broker MQTT"]
+        TB["ThingsBoard Cloud<br/>dashboards"]
+    end
+
+    subgraph Docker["docker compose"]
+        API["Backend Conta Litro<br/>Spring Boot"]
+        DB[("PostgreSQL 16")]
+    end
+
+    USR["Usuário / sistema cliente"]
+
+    ESP -- "publica via MQTT/TLS :8883<br/>contalitro/{deviceId}/telemetry<br/>contalitro/{deviceId}/status + Last Will" --> MQTT
+    MQTT -- "assinatura (Subscribe Only)<br/>contalitro/+/telemetry e /status" --> API
+    API -- "JDBC (esquema pelo Flyway)" --> DB
+    API -- "HTTP POST /api/v1/{token}/telemetry<br/>um token por veículo" --> TB
+    USR -- "REST + Swagger UI :8080" --> API
+    USR -. "navegador" .-> TB
+```
+
+| Peça | Papel | Padrão |
+|---|---|---|
+| ESP32 → HiveMQ | O equipamento publica e não conhece quem consome | **Publish/Subscribe** |
+| Tópico `status` | O broker publica `offline` sozinho quando o equipamento cai | **Last Will and Testament** (MQTT) |
+| HiveMQ → Backend | O backend só assina, não publica nem comanda o equipamento | **Consumidor** de mensagens, credencial de menor privilégio |
+| Backend → ThingsBoard | Repasse por HTTP: um único cliente atende a frota inteira | **Gateway** de integração (API de dispositivos) |
+| Backend → PostgreSQL | Histórico, viagens e relatórios | Banco relacional versionado por **migrações** (Flyway) |
+| `.env` + `docker compose` | A mesma imagem roda em qualquer ambiente | **Configuração externalizada** (12-factor) |
+
+### Arquitetura do software
+
+Arquitetura **hexagonal (Ports & Adapters)**, organizada nas camadas da **Arquitetura Limpa**:
 
 ```
 infrastructure ──► application ──► domain
  (adaptadores)      (casos de uso)   (regras de negócio)
 ```
 
+```mermaid
+flowchart LR
+    subgraph ENTRADA["Adaptadores de entrada · infrastructure"]
+        WEB["web<br/>VeiculoController · ViagemController<br/>RelatorioController · TratadorDeErros"]
+        MQ["mqtt<br/>ClienteMqtt → FilaProcessamento<br/>→ RoteadorMensagens + ConversorTelemetria"]
+        SCH["mqtt<br/>VerificadorInatividade (@Scheduled)"]
+    end
+
+    subgraph APP["application"]
+        PIN["port.in<br/>interfaces *UseCase<br/>comandos: NovoVeiculo · TelemetriaRecebida"]
+        SVC["service<br/>implementações *Service"]
+        POUT["port.out<br/>*RepositoryPort · PainelPort · TransacaoPort"]
+    end
+
+    subgraph DOM["domain"]
+        MOD["model<br/>Veiculo · Viagem · Leitura<br/>Contadores · RegrasDeViagem"]
+    end
+
+    subgraph SAIDA["Adaptadores de saída · infrastructure"]
+        PER["persistence<br/>*PersistenceAdapter → entidades JPA → Spring Data"]
+        TX["persistence<br/>TransacaoSpringAdapter"]
+        TBA["thingsboard<br/>ThingsBoardHttpPainel · PainelDesabilitado"]
+    end
+
+    CFG["config · CasosDeUsoConfig<br/>(composition root)"]
+
+    WEB --> PIN
+    MQ --> PIN
+    SCH --> PIN
+    SVC -. implementa .-> PIN
+    SVC --> MOD
+    SVC --> POUT
+    PER -. implementa .-> POUT
+    TX -. implementa .-> POUT
+    TBA -. implementa .-> POUT
+    CFG -. instancia e injeta .-> SVC
+```
+
 As dependências apontam só para dentro. `domain` e `application` são Java puro, sem Spring
-nem JPA. Trocar o broker, o painel ou o banco não muda nenhuma regra de negócio.
+nem JPA. Trocar o broker, o painel ou o banco não muda nenhuma regra de negócio. Os adaptadores
+de entrada chamam os casos de uso pelas interfaces de `port.in`. Os casos de uso falam com o
+mundo externo só pelas interfaces de `port.out`, que a `infrastructure` implementa
+(**inversão de dependência**).
 
 | Pacote | Conteúdo |
 |---|---|
@@ -30,7 +110,53 @@ nem JPA. Trocar o broker, o painel ou o banco não muda nenhuma regra de negóci
 | `infrastructure.thingsboard` | Envio HTTP ao ThingsBoard |
 | `infrastructure.config` | Propriedades e ligação dos casos de uso ao Spring |
 
+### Padrões de projeto
+
+| Padrão | Onde | Para quê |
+|---|---|---|
+| **Ports & Adapters** | `application.port.in` / `port.out` e os pacotes de `infrastructure` | Isolar as regras de negócio de framework, banco, broker e painel |
+| **Use Case / Application Service** | `*UseCase` + `*Service` | Uma classe por operação do sistema, testável sem Spring |
+| **Command** (objeto de entrada) | `NovoVeiculo`, `AlteracaoVeiculo`, `TelemetriaRecebida` | O caso de uso recebe dados já validados, sem depender de JSON ou HTTP |
+| **Composition Root / Injeção de dependência** | `CasosDeUsoConfig` | Único lugar que monta os casos de uso; o resto do código não conhece o Spring |
+| **Domain Model** (entidades ricas) | `Veiculo`, `Viagem` (`abrir`, `fechar`, `registrarComunicacao`) | O estado só muda pelas regras do domínio |
+| **Value Object** | `Contadores`, `DadosTelemetria`, `Leitura` (records imutáveis) | Valores comparados pelo conteúdo e sem efeitos colaterais |
+| **Domain Service** | `RegrasDeViagem.aplicar` → `Transicao` | Decisão de abrir, atualizar ou fechar viagem, em função pura |
+| **Static Factory Method** | `Viagem.abrir`, `Leitura.registrar`, `Veiculo.autoCadastrado` | Construção com nome de negócio e invariantes garantidas |
+| **Repository** | `*RepositoryPort` → `*PersistenceAdapter` | A aplicação pede objetos de domínio, não tabelas |
+| **Data Mapper** | `*Entity.de(...)` / `paraDominio()` | Entidade JPA separada do modelo de domínio |
+| **Adapter** (GoF) | `*PersistenceAdapter`, `TransacaoSpringAdapter`, `ThingsBoardHttpPainel` | Traduzir as portas para Spring Data, `TransactionTemplate` e HTTP |
+| **Strategy + Null Object** | `PainelPort` → `ThingsBoardHttpPainel` ou `PainelDesabilitado` | Com `TB_ENABLED=false` o envio vira um no-op, sem `if` no caso de uso |
+| **Unit of Work** (fronteira transacional) | `TransacaoPort.executar` | Veículo, viagem e leitura gravados juntos ou nada |
+| **Producer-Consumer** (thread única) | `FilaProcessamento` | Libera a thread do Paho e garante ordem e exclusão sem locks |
+| **Message Router** | `RoteadorMensagens` | Escolhe o caso de uso pelo tópico (`telemetry` ou `status`) |
+| **Message Translator / Anti-Corruption Layer** | `ConversorTelemetria` | Isola o formato do firmware; se o JSON mudar, só ele muda |
+| **Idempotent Receiver** | `ProcessarTelemetriaService` (mesmo `deviceId` + `ts`) | Descarta mensagens repetidas na reconexão do MQTT |
+| **DTO** | `infrastructure.web.dto` | O contrato da API é separado do domínio; o token nunca sai na resposta |
+| **Exception Handler centralizado** | `TratadorDeErros` (`@RestControllerAdvice`, RFC 9457) | Erros no formato `application/problem+json` |
+| **Graceful Shutdown** | `SmartLifecycle` em `ClienteMqtt` e `FilaProcessamento` | Para de receber, esvazia a fila e só então fecha o banco |
+
 ### Caminho de uma mensagem
+
+```mermaid
+sequenceDiagram
+    participant ESP as ESP32
+    participant B as HiveMQ
+    participant C as ClienteMqtt
+    participant F as FilaProcessamento
+    participant R as RoteadorMensagens
+    participant S as ProcessarTelemetriaService
+    participant DB as PostgreSQL
+    participant TB as ThingsBoard
+
+    ESP->>B: publica contalitro/{id}/telemetry
+    B->>C: entrega a mensagem
+    C->>F: submeter(tarefa) e libera a thread do Paho
+    F->>R: rotear(tópico, payload) na thread única
+    R->>R: ConversorTelemetria traduz o JSON
+    R->>S: processar(TelemetriaRecebida)
+    S->>DB: veículo + viagem + leitura (uma transação)
+    S-)TB: POST telemetry (fora da transação)
+```
 
 1. `ClienteMqtt` recebe a mensagem, anota o instante de chegada e a coloca na
    `FilaProcessamento`, liberando a thread do Paho na hora (senão o keepalive atrasa).
